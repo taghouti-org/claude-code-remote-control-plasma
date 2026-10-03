@@ -54,7 +54,29 @@ status_json() {
         "$state" "$connected" "$capacity" "$url" "$(systemctl --user is-enabled "$UNIT" 2>/dev/null)" "$dir"
 }
 
+run_server() {
+    # Used by the service: run Remote Control and pass on only lines that changed.
+    # Remote Control redraws its status block several times a second, which would
+    # otherwise flood the journal. Lines are keyed with digits/ids masked, so
+    # "Capacity: 1/32" -> "Capacity: 2/32" is logged, and all connection-state
+    # lines share one key so a reconnect is always logged.
+    local claude_bin="${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")}"
+    set -o pipefail
+    "$claude_bin" remote-control "$@" 2>&1 | awk '
+        {
+            line = $0
+            plain = line
+            gsub(/\033\][^\033]*\033\\/, "", plain)
+            gsub(/\033\[[0-9;?]*[a-zA-Z]/, "", plain)
+            if (plain ~ /^[[:space:]]*$/) next
+            if (plain ~ /Connected|Connecting|Reconnecting|Disconnected/) key = "state"
+            else { key = plain; gsub(/[0-9]+/, "N", key) }
+            if (last[key] != plain) { last[key] = plain; print line; fflush() }
+        }'
+}
+
 case "$1" in
+    run) shift; run_server "$@" ;;
     start|stop|restart) systemctl --user "$1" "$UNIT" ;;
     json) status_json ;;
     logs) journalctl --user -u "$UNIT" -f -o cat ;;
@@ -66,7 +88,7 @@ print("Claude Remote Control: %s, %s, sessions %s, folder %s, start at boot: %s"
       % (d["state"], conn, d["sessions"] or "-", d["dir"], d["enabled"]))
 if d["url"]:
     print(d["url"])' ;;
-    *) echo "usage: claude-rc [status|json|start|stop|restart|logs]" >&2; exit 2 ;;
+    *) echo "usage: claude-rc [status|json|start|stop|restart|logs|run]" >&2; exit 2 ;;
 esac
 EOF_CLAUDE_RC
 chmod +x "$BIN_DIR/claude-rc"
@@ -79,7 +101,9 @@ Documentation=https://code.claude.com/docs/en/remote-control
 
 [Service]
 WorkingDirectory=$RC_DIR
-ExecStart=$CLAUDE_BIN remote-control
+Environment=CLAUDE_BIN=$CLAUDE_BIN
+# claude-rc run drops the repeated status redraws so the journal stays small
+ExecStart=$BIN_DIR/claude-rc run
 # Retry until the network is up at boot, and after crashes or sign-in hiccups
 Restart=always
 RestartSec=30
@@ -192,15 +216,17 @@ PlasmoidItem {
         onTriggered: root.refresh()
     }
 
-    compactRepresentation: MouseArea {
-        hoverEnabled: true
-        onClicked: root.expanded = !root.expanded
+    // The icon is the root so the panel gets a real size hint from it
+    compactRepresentation: Kirigami.Icon {
+        source: Plasmoid.icon
+        active: mouseArea.containsMouse
+        opacity: root.connected ? 1 : 0.6
 
-        Kirigami.Icon {
+        MouseArea {
+            id: mouseArea
             anchors.fill: parent
-            source: Plasmoid.icon
-            active: parent.containsMouse
-            opacity: root.connected ? 1 : 0.6
+            hoverEnabled: true
+            onClicked: root.expanded = !root.expanded
         }
     }
 
