@@ -47,6 +47,7 @@ claude-rc start
 claude-rc restart
 claude-rc logs       # follow the service log
 claude-rc json       # machine-readable status (used by the widget)
+claude-rc run        # what the service runs (Remote Control with a quiet log)
 ```
 
 Then open [claude.ai/code](https://claude.ai/code) or the Claude app, pick this computer's environment, and start a session.
@@ -55,7 +56,7 @@ Then open [claude.ai/code](https://claude.ai/code) or the Claude app, pick this 
 
 - [Claude Code](https://code.claude.com), logged in with a Claude account that has a subscription
 - systemd, Python 3 (for the trust check)
-- KDE Plasma 6 for the widget (the service and `claude-rc` work on any desktop)
+- KDE Plasma 6 for the widget (tested on Plasma 6.6, Kubuntu 26.04); the service and `claude-rc` work on any desktop
 
 ## What gets installed
 
@@ -82,6 +83,7 @@ Remove the widget from the panel first if it's there. Lingering stays on; turn i
 
 ## How it works
 
-1. The service runs `claude remote-control` as a persistent server in the chosen folder. It registers this computer as an environment on claude.ai and accepts up to 32 concurrent sessions there.
-2. `claude-rc json` reads the service state from systemd and the current run's log from the journal (connection state, `Capacity: n/32`, and the environment link).
-3. The widget runs `claude-rc json` every 5 seconds (every 2 seconds while its popup is open), and calls `claude-rc start|stop|restart` for the buttons.
+1. The service runs `claude-rc run`, which starts `claude remote-control` as a persistent server in the chosen folder. It registers this computer as an environment on claude.ai and accepts up to 32 concurrent sessions there.
+2. Remote Control redraws its status display several times a second; under systemd that becomes ~300 identical journal lines a minute. `claude-rc run` passes on only lines that changed (connection state, session count, new session links), so the log stays small.
+3. `claude-rc json` reads the service state from systemd and the current run's log from the journal (connection state, `Capacity: n/32`, and the environment link).
+4. The widget runs `claude-rc json` every 5 seconds (every 2 seconds while its popup is open), and calls `claude-rc start|stop|restart` for the buttons.
