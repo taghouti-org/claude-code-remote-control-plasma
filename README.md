@@ -15,13 +15,13 @@ Start [Claude Code Remote Control](https://code.claude.com/docs/en/remote-contro
 ## Quick Install
 
 ```bash
-curl -L https://gist.github.com/taghouttarek/GIST_ID/raw/install-claude-rc.sh | bash
+curl -L https://gist.github.com/taghouttarek/2e3825d96ce8a8ef0c97bfe5f96752e2/raw/install-claude-rc.sh | bash
 ```
 
 Sessions start in `~/claude-remote` by default. To use another folder:
 
 ```bash
-curl -L https://gist.github.com/taghouttarek/GIST_ID/raw/install-claude-rc.sh | CLAUDE_RC_DIR=~/projects/myapp bash
+curl -L https://gist.github.com/taghouttarek/2e3825d96ce8a8ef0c97bfe5f96752e2/raw/install-claude-rc.sh | CLAUDE_RC_DIR=~/projects/myapp bash
 ```
 
 Then add the widget: right-click the panel → **Add Widgets…** → search **"Claude Remote Control"**.
