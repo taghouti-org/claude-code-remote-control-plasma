@@ -34,6 +34,10 @@ cat > "$BIN_DIR/claude-rc" << 'EOF_CLAUDE_RC'
 #!/bin/bash
 # Control and inspect the Claude Remote Control service (~/.config/systemd/user/claude-remote-control.service)
 UNIT=claude-remote-control.service
+# Written by `claude-rc run` whenever the connection switches between "up" and "down"
+STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/claude-rc.state"
+# Restart Remote Control if it stays disconnected/reconnecting this long (seconds)
+WATCHDOG_SECS="${CLAUDE_RC_WATCHDOG_SECS:-60}"
 
 status_json() {
     local state inv log connected capacity url
@@ -43,8 +47,7 @@ status_json() {
     if [ -n "$inv" ]; then
         log=$(journalctl --user _SYSTEMD_INVOCATION_ID="$inv" -o cat -n 60 --no-pager -q 2>/dev/null \
               | sed 's/\x1b\][^\x1b]*\x1b\\//g; s/\x1b\[[0-9;?]*[a-zA-Z]//g')
-        last=$(echo "$log" | grep -E 'Connected|Connecting|Reconnecting|Disconnected' | tail -1)
-        echo "$last" | grep -q 'Connected' && ! echo "$last" | grep -qE 'Disconnected|Reconnecting' && connected=true
+        [ "$(cat "$STATE_FILE" 2>/dev/null)" = up ] && connected=true
         capacity=$(echo "$log" | grep -oE 'Capacity: [0-9]+/[0-9]+' | tail -1 | cut -d' ' -f2)
         url=$(echo "$log" | grep -oE 'https://claude\.ai/code\?environment=[A-Za-z0-9_]+' | tail -1)
     fi
@@ -55,24 +58,48 @@ status_json() {
 }
 
 run_server() {
-    # Used by the service: run Remote Control and pass on only lines that changed.
-    # Remote Control redraws its status block several times a second, which would
-    # otherwise flood the journal. Lines are keyed with digits/ids masked, so
-    # "Capacity: 1/32" -> "Capacity: 2/32" is logged, and all connection-state
-    # lines share one key so a reconnect is always logged.
+    # Used by the service. Runs Remote Control and:
+    # - passes on only lines that changed. Remote Control redraws its status block
+    #   several times a second, which would otherwise flood the journal. Lines are
+    #   keyed with digits masked, so "Capacity: 1/32" -> "2/32" is still logged;
+    #   all connection-state lines share one key so state changes are always logged.
+    # - records the connection state ("up"/"down") in $STATE_FILE when it changes.
+    # - watchdog: if the state stays "down" for $WATCHDOG_SECS, stops Remote Control
+    #   so systemd restarts it (it can sit in "Reconnecting" for a long time).
     local claude_bin="${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")}"
-    set -o pipefail
-    "$claude_bin" remote-control "$@" 2>&1 | awk '
+    echo down > "$STATE_FILE"
+    "$claude_bin" remote-control "$@" > >(awk -v sf="$STATE_FILE" '
+        function setstate(s) { if (s != cur) { cur = s; print s > sf; close(sf) } }
         {
             line = $0
             plain = line
             gsub(/\033\][^\033]*\033\\/, "", plain)
             gsub(/\033\[[0-9;?]*[a-zA-Z]/, "", plain)
             if (plain ~ /^[[:space:]]*$/) next
-            if (plain ~ /Connected|Connecting|Reconnecting|Disconnected/) key = "state"
+            if (plain ~ /Reconnected after/) setstate("up")
+            else if (plain ~ /Reconnecting|Disconnected|Connecting/) setstate("down")
+            else if (plain ~ /Connected/) setstate("up")
+            if (plain ~ /Connected|Connecting|Reconnecting|Disconnected|Reconnected/) key = "state"
             else { key = plain; gsub(/[0-9]+/, "N", key) }
             if (last[key] != plain) { last[key] = plain; print line; fflush() }
-        }'
+        }') 2>&1 &
+    local pid=$!
+    trap 'kill -TERM "$pid" 2>/dev/null' TERM INT
+
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 10 & wait $!
+        if [ "$(cat "$STATE_FILE" 2>/dev/null)" = down ]; then
+            local down_for=$(( $(date +%s) - $(stat -c %Y "$STATE_FILE") ))
+            if [ "$down_for" -ge "$WATCHDOG_SECS" ]; then
+                echo "claude-rc watchdog: not connected for ${down_for}s, restarting Remote Control"
+                kill -TERM "$pid" 2>/dev/null
+                for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+                kill -KILL "$pid" 2>/dev/null
+                exit 1
+            fi
+        fi
+    done
+    wait "$pid"
 }
 
 case "$1" in
@@ -104,9 +131,10 @@ WorkingDirectory=$RC_DIR
 Environment=CLAUDE_BIN=$CLAUDE_BIN
 # claude-rc run drops the repeated status redraws so the journal stays small
 ExecStart=$BIN_DIR/claude-rc run
-# Retry until the network is up at boot, and after crashes or sign-in hiccups
+# Retry until the network is up at boot, after crashes, and when the claude-rc
+# watchdog stops it after 60 s without a connection
 Restart=always
-RestartSec=30
+RestartSec=5
 
 [Install]
 WantedBy=default.target
