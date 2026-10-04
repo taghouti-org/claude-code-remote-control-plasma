@@ -4,7 +4,7 @@ Start [Claude Code Remote Control](https://code.claude.com/docs/en/remote-contro
 
 ## What you get
 
-- **`claude-remote-control.service`**: a systemd user service that runs `claude remote-control` in a folder of your choice, starts at boot (even before you log in), and reconnects by itself after network drops or crashes.
+- **`claude-remote-control.service`**: a systemd user service that runs `claude remote-control` in a folder of your choice, starts at boot (even before you log in), and recovers by itself after network drops or crashes. A **watchdog restarts it if it stays disconnected for 60 seconds**, since Remote Control can otherwise sit in "Reconnecting" indefinitely.
 - **`claude-rc`**: a terminal command to check, start, stop or restart it.
 - **Claude Remote Control widget** (Plasma 6): a panel icon that shows whether it's connected. Click it for a popup with:
   - status (connected / connecting / stopped)
@@ -85,5 +85,6 @@ Remove the widget from the panel first if it's there. Lingering stays on; turn i
 
 1. The service runs `claude-rc run`, which starts `claude remote-control` as a persistent server in the chosen folder. It registers this computer as an environment on claude.ai and accepts up to 32 concurrent sessions there.
 2. Remote Control redraws its status display several times a second; under systemd that becomes ~300 identical journal lines a minute. `claude-rc run` passes on only lines that changed (connection state, session count, new session links), so the log stays small.
-3. `claude-rc json` reads the service state from systemd and the current run's log from the journal (connection state, `Capacity: n/32`, and the environment link).
-4. The widget runs `claude-rc json` every 5 seconds (every 2 seconds while its popup is open), and calls `claude-rc start|stop|restart` for the buttons.
+3. It also records the connection state (`up`/`down`) in `$XDG_RUNTIME_DIR/claude-rc.state` whenever it changes ("Reconnected after …" counts as up). If the state stays `down` for 60 seconds, the watchdog stops Remote Control and systemd starts it again 5 seconds later. Change the limit with `Environment=CLAUDE_RC_WATCHDOG_SECS=120` in the service.
+4. `claude-rc json` reads the service state from systemd, the connection state from the state file, and the session count (`Capacity: n/32`) and environment link from the current run's journal.
+5. The widget runs `claude-rc json` every 5 seconds (every 2 seconds while its popup is open), and calls `claude-rc start|stop|restart` for the buttons.
