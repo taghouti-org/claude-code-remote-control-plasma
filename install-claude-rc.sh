@@ -591,6 +591,7 @@ EOF_CLAUDE_RC
   <group name="General">
     <entry name="showUsage" type="Bool"><default>true</default></entry>
     <entry name="panelText" type="String"><default>none</default></entry>
+    <entry name="iconFill" type="Bool"><default>true</default></entry>
     <entry name="usageInterval" type="Int"><default>60</default></entry>
     <entry name="alertLimits" type="Bool"><default>true</default></entry>
     <entry name="warnPercent" type="Int"><default>80</default></entry>
@@ -627,6 +628,7 @@ KCM.SimpleKCM {
 
     property alias cfg_showUsage: showUsage.checked
     property string cfg_panelText
+    property alias cfg_iconFill: iconFill.checked
     property alias cfg_usageInterval: usageInterval.value
     property alias cfg_alertLimits: alertLimits.checked
     property alias cfg_warnPercent: warnPercent.value
@@ -659,6 +661,18 @@ KCM.SimpleKCM {
             model: page.panelChoices.map(c => c.label)
             currentIndex: Math.max(0, page.panelChoices.findIndex(c => c.id === page.cfg_panelText))
             onActivated: index => page.cfg_panelText = page.panelChoices[index].id
+        }
+        QQC2.CheckBox {
+            id: iconFill
+            Kirigami.FormData.label: "Panel icon:"
+            text: "Colour it in as the 5-hour limit is used"
+        }
+        QQC2.Label {
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 22
+            wrapMode: Text.Wrap
+            font: Kirigami.Theme.smallFont
+            opacity: 0.75
+            text: "The icon fills from the bottom: 20% used colours a fifth of it green, turning yellow, orange and then red as the limit is used up."
         }
         QQC2.SpinBox {
             id: usageInterval
@@ -816,6 +830,12 @@ PlasmoidItem {
         return level;
     }
     readonly property color alertColor: alertLevel === 2 ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.neutralTextColor
+
+    // Share of the panel icon to colour in: the part of the 5-hour limit that is used.
+    readonly property real fillFraction: cfg.iconFill && limits && limits.five_hour && !limitsStale
+                                         ? Math.max(0, Math.min(1, limits.five_hour.used / 100)) : 0
+    // Green when nearly unused, through yellow and orange, to red when full.
+    readonly property color fillColor: Qt.hsla(0.33 * (1 - fillFraction), 0.9, 0.45, 1)
 
     readonly property string panelLabel: {
         if (cfg.panelText === "limit") {
@@ -1057,8 +1077,32 @@ PlasmoidItem {
             active: compact.containsMouse
             opacity: root.connected ? 1 : 0.6
 
+            // The same icon in the usage colour, revealed from the bottom up.
+            // Icons have a little empty space around the drawing, so the fill
+            // is mapped onto the drawn part rather than the whole square.
+            Item {
+                readonly property real margin: 0.12
+                visible: root.fillFraction > 0
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: parent.height * (margin + root.fillFraction * (1 - 2 * margin))
+                clip: true
+
+                Kirigami.Icon {
+                    anchors.left: parent.left
+                    anchors.bottom: parent.bottom
+                    width: panelIcon.width
+                    height: panelIcon.height
+                    source: Plasmoid.icon
+                    isMask: true
+                    color: root.fillColor
+                }
+            }
+
+            // With the fill on, the icon's colour already carries the warning.
             Rectangle {
-                visible: root.alertLevel > 0
+                visible: root.alertLevel > 0 && root.fillFraction === 0
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 width: Math.max(6, Math.round(parent.width / 3))

@@ -25,7 +25,11 @@ The screenshots use sample data.
   - a plan limit passes the warning (80%) or critical (95%) threshold, or a nearly used-up limit resets
   - today's or the current window's estimated cost passes a budget you set
   - Remote Control has been disconnected for 5 minutes
-- A coloured dot on the panel icon while a limit or budget is over its threshold, and optionally the limit percentage or window cost next to the icon.
+- **A panel icon that fills with colour** as the 5-hour limit is used: a fifth of it in green at 20%, turning yellow, orange and then red as you approach 100%. It can be turned off in the settings, in which case a coloured dot marks a limit or budget over its threshold.
+
+  ![The panel icon at 20%, 50%, 80% and 100% of the 5-hour limit](docs/screenshots/icon-fill.png)
+
+- Optionally, the limit percentage or the window cost next to the icon.
 
 ## Quick Install
 
