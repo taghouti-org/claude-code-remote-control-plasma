@@ -15,13 +15,13 @@ Start [Claude Code Remote Control](https://code.claude.com/docs/en/remote-contro
 ## Quick Install
 
 ```bash
-curl -L https://gist.github.com/taghouttarek/2e3825d96ce8a8ef0c97bfe5f96752e2/raw/install-claude-rc.sh | bash
+curl -L https://raw.githubusercontent.com/taghouti-org/claude-code-remote-control-plasma/main/install-claude-rc.sh | bash
 ```
 
 Sessions start in `~/claude-remote` by default. To use another folder:
 
 ```bash
-curl -L https://gist.github.com/taghouttarek/2e3825d96ce8a8ef0c97bfe5f96752e2/raw/install-claude-rc.sh | CLAUDE_RC_DIR=~/projects/myapp bash
+curl -L https://raw.githubusercontent.com/taghouti-org/claude-code-remote-control-plasma/main/install-claude-rc.sh | CLAUDE_RC_DIR=~/projects/myapp bash
 ```
 
 Then add the widget: right-click the panel → **Add Widgets…** → search **"Claude Remote Control"**.
@@ -88,7 +88,3 @@ Remove the widget from the panel first if it's there. Lingering stays on; turn i
 3. It also records the connection state (`up`/`down`) in `$XDG_RUNTIME_DIR/claude-rc.state` whenever it changes ("Reconnected after …" counts as up). If the state stays `down` for 60 seconds, the watchdog stops Remote Control and systemd starts it again 5 seconds later. Change the limit with `Environment=CLAUDE_RC_WATCHDOG_SECS=120` in the service.
 4. `claude-rc json` reads the service state from systemd, the connection state from the state file, and the session count (`Capacity: n/32`) and environment link from the current run's journal.
 5. The widget runs `claude-rc json` every 5 seconds (every 2 seconds while its popup is open), and calls `claude-rc start|stop|restart` for the buttons.
-
----
-
-First published as a [gist](https://gist.github.com/taghouttarek/2e3825d96ce8a8ef0c97bfe5f96752e2).
