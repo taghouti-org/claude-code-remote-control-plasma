@@ -2,6 +2,10 @@
 
 Start [Claude Code Remote Control](https://code.claude.com/docs/en/remote-control) automatically at boot, so you can open sessions on your computer from [claude.ai/code](https://claude.ai/code) or the Claude mobile app at any time, and see its status in a Plasma panel widget.
 
+| Connected | Stopped |
+| --- | --- |
+| ![Widget popup showing Connected, 1/32 sessions, the folder, and Stop, Restart and Open in browser buttons](docs/screenshots/widget-connected.png) | ![Widget popup showing Stopped with a Start button](docs/screenshots/widget-stopped.png) |
+
 ## What you get
 
 - **`claude-remote-control.service`**: a systemd user service that runs `claude remote-control` in a folder of your choice, starts at boot (even before you log in), and recovers by itself after network drops or crashes. A **watchdog restarts it if it stays disconnected for 60 seconds**, since Remote Control can otherwise sit in "Reconnecting" indefinitely.
